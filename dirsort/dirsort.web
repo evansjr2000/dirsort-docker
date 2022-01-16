@@ -1,0 +1,378 @@
+% Written in WEB. 
+\input epsf 
+\def\web{{\tt WEB}} 
+\def\pascal{{\bf Pascal}} 
+\font\caps=cmcsc10
+\def\nsd{{\caps NSD}}
+\def\Ada{{\bf Ada}} 
+\def\CPP{{\bf C++}}
+\def\lline#1{\par\line{$#1$\hfill}\hang}
+\def\rst#1{\global\ind=#1}
+% ** First, here are the the PiCTeX logo, and the syllable PiC:
+\def\PiC{P\kern-.12em\lower.5ex\hbox{I}\kern-.075emC}
+\def\PiCTeX{\PiC\kern-.11em\TeX}
+
+ 
+\def\today{\ifcase\month\or 
+ January\or February\or March\or April\or May\or June\or 
+ July\or August\or September\or October\or November\or December\fi 
+ \space\number\day, \number\year} 
+ 
+\def\title{Directory Sort}
+\def\contentspagenumber{0} 
+\def\topofcontents{\null 
+  \def\titlepage{F} % include headline on the contents page 
+  \def\rheader{\mainfont\hfil \contentspagenumber} 
+  \vfill 
+  \centerline{\titlefont {\ttitlefont } Directory Sort}
+  \vskip 15pt 
+  \centerline{(Version 1.2, March 2014}
+  \centerline{(Ansi C Version)} 
+  \vfill} 
+\def\botofcontents{\vfill 
+    \centerline{\sevenrm This documentation last produced \today.} 
+} 
+%\magnify{850}
+
+@* Introduction. This is a routine to search through a directory hierarchy,
+find all the files matching the input specifications, and list them
+out in order according to size.  It is based on {\bf Program 4.7} in W. Richard
+Stevens wonderful book {\it Advanced Programming in the UNIX Environment.}
+
+Updated for huge file systems in 2013.
+Essentially made all integers into long integers
+to accomodate files of size greater than
+2 Gigabytes, and huge directories.
+
+
+@i "web_info.tex"
+
+@ The following is the top-down structure of all my \.{CWEB} programs.
+\.{CWEB} is just a variant of \.{WEB} that handles Standard C.
+@a
+@c
+@< Global |#include|s @> @/
+@< Global structures @> @/
+@< Global variables @> @/
+@< Functions @> @/
+@< The main calling routine @>
+
+@
+@< Global |#include|s @>=
+#include        <sys/types.h>
+#include        <sys/stat.h>
+#include        <dirent.h>
+#include        <limits.h>
+#include        "ourhdr.h"
+
+
+@ Function type that's called for each filename.
+@d MAXSYSFILES 2000000
+@< Global structures @>=
+typedef int     (Myfunc)(const char *, const struct stat *, int);
+static long filesize[MAXSYSFILES],indices[MAXSYSFILES];
+static char *filenames[MAXSYSFILES];
+
+@
+@< Global variables @>=
+static Myfunc   myfunc;
+static int              myftw(char *, Myfunc *);
+static int              dopath(Myfunc *);
+static long     nreg, ndir, nblk, nchr, nfifo, nslink, nsock, ntot;
+
+
+@ Here is the top calling routine.  I recursively descend the directory
+saving the file names which match the parameters.
+@< The main calling routine @>=
+ 
+int
+main(int argc, char *argv[])
+{
+        int             ret;
+	extern int	optind;
+	@< Parse input parameters @> @/
+	for ( ; optind < argc; optind++)
+            ret = myftw(argv[optind], myfunc);           /* does it all */
+	@< Print statistics @> @/
+	@< Sort names @> @/
+	@< Output data @> @/
+        exit(ret);
+}
+ 
+
+@ Here I print out the statistics.
+@< Print statistics @>=
+if ( (ntot = nreg + ndir + nblk + nchr + nfifo + nslink + nsock) == 0)
+	ntot = 1; 
+printf("regular files  = %7ld, %5.2f %%\n", nreg,  nreg*100.0/ntot);
+printf("directories    = %7ld, %5.2f %%\n", ndir,  ndir*100.0/ntot);
+printf("block special  = %7ld, %5.2f %%\n", nblk,  nblk*100.0/ntot);
+printf("char special   = %7ld, %5.2f %%\n", nchr,  nchr*100.0/ntot);
+printf("FIFOs          = %7ld, %5.2f %%\n", nfifo, nfifo*100.0/ntot);
+printf("symbolic links = %7ld, %5.2f %%\n", nslink,nslink*100.0/ntot);
+printf("sockets        = %7ld, %5.2f %%\n", nsock, nsock*100.0/ntot);
+if (do_uid)
+printf("\n%s files = %7ld, %5.2f %%\n",pwd->pw_name, ureg, ureg*100.0/ntot);
+
+@ The routine |myftw()| is lifted whole from {\it APUE}.
+  Descend through the hierarchy, starting at "pathname".
+  The caller's func() is called for every file.
+@d FTW_F   1               /* file other than directory */
+@d FTW_D   2               /* directory */
+@d FTW_DNR 3               /* directory that can't be read */
+@d FTW_NS  4               /* file that we can't stat */
+@< Functions @>=
+static char     *fullpath;   /* contains full pathname for every file */
+static int                   /* we return whatever func() returns */
+myftw(char *pathname, Myfunc *func)
+{
+fullpath = path_alloc(NULL);    /* malloc's for |PATH_MAX+1| bytes */
+				/* ({Prog pathalloc}) */ 
+strcpy(fullpath, pathname);             /* initialize fullpath */
+return(dopath(func));
+}
+
+@ Function |dopath()|.
+  Descend through the hierarchy, starting at "fullpath".
+  If "fullpath" is anything other than a directory, we lstat() it,
+  call func(), and return.  For a directory, we call ourself
+  recursively for each name in the directory.
+@< Functions @>=
+static int    /* we return whatever func() returns */
+dopath(Myfunc* func)
+{
+        struct stat             statbuf;
+        struct dirent   *dirp;
+        DIR                             *dp;
+        int                             ret;
+        char                    *ptr;
+        if (lstat(fullpath, &statbuf) < 0)
+                return(func(fullpath, &statbuf, FTW_NS));       /* stat error */
+ 
+        if (S_ISDIR(statbuf.st_mode) == 0) {
+	         if (debug) {
+		 printf("debug>fullpath = %s.\n",fullpath);
+		 }
+                return(func(fullpath, &statbuf, FTW_F));        /* not a directory */
+		}
+        /*
+         * It's a directory.  First call func() for the directory,
+         * then process each filename in the directory.
+         */
+	 if (debug) {
+	 printf("debug>fullpath = %s.\n",fullpath);
+	 }
+        if ( (ret = func(fullpath, &statbuf, FTW_D)) != 0)
+                return(ret);
+        ptr = fullpath + strlen(fullpath);      /* point to end of fullpath */
+        *ptr++ = '/';
+        *ptr = 0;
+        if ( (dp = opendir(fullpath)) == NULL)
+                return(func(fullpath, &statbuf, FTW_DNR));
+/* can't read directory */
+        while ( (dirp = readdir(dp)) != NULL) {
+                if (strcmp(dirp->d_name, ".") == 0  ||
+                    strcmp(dirp->d_name, "..") == 0)
+                                continue;               /* ignore dot and dot-dot */
+                strcpy(ptr, dirp->d_name);      /* append name after slash */
+                if ( (ret = dopath(func)) != 0)         /* recursive */
+                        break;  /* time to leave */
+        }
+        ptr[-1] = 0;    /* erase everything from slash onwards */
+        if (closedir(dp) < 0)
+                err_ret("can't close directory %s", fullpath);
+        return(ret);
+}
+
+@ This is my function.
+@< Functions @>=
+static int
+myfunc(const char *pathname, const struct stat *statptr, int type)
+{
+        switch (type) {
+        case FTW_F:
+                switch (statptr->st_mode & S_IFMT) {
+                case S_IFREG:   nreg++;
+				@< Process regular file @> @/
+			        break;
+                case S_IFBLK:   nblk++;         break;
+                case S_IFCHR:   nchr++;         break;
+                case S_IFIFO:   nfifo++;        break;
+                case S_IFLNK:   nslink++;       break;
+                case S_IFSOCK:  nsock++;        break;
+                case S_IFDIR:
+                        err_dump("for S_IFDIR for %s", pathname);
+                                        /* directories should have type = |FTW_D| */
+                }
+                break;
+ 
+        case FTW_D:
+                ndir++;
+                break;
+ 
+        case FTW_DNR:
+                err_ret("can't read directory %s", pathname);
+                break;
+ 
+        case FTW_NS:
+                err_ret("stat error for %s", pathname);
+                break;
+ 
+        default:
+                err_dump("unknown type %d for pathname %s", type, pathname);
+        }
+ 
+        return(0);
+}
+
+@
+@< Process regular file @>=
+if ( (uid==statptr->st_uid) || (!do_uid)) {
+    ureg++;
+    filenames[ureg] = malloc(strlen(pathname)+1);
+    strcpy(filenames[ureg],pathname);
+    filesize[ureg] = statptr->st_size;
+    if (debug) {
+    printf("Debug> Process regular file.\n");
+    printf("Debug> Count is %ld.\n",ureg);
+    printf("Debug> Filename is %s.\n",filenames[ureg]);
+    printf("Debug> Filesize is %ld.\n",filesize[ureg]);
+    }
+    }
+
+@ Let me declare the new variables used above.
+@< Global variables @>=
+long ureg;
+int debug=0;
+
+@
+@< Parse input parameters @>=
+yrcnt = 50;
+while ((c=getopt(argc,argv,"n:u:")) != EOF) {
+    switch (c) {
+    case 'n':
+	yrcnt = atoi(optarg);
+	break;
+    case 'u':
+	pwd = getpwnam(optarg);
+	if (pwd == NULL) {
+	    fprintf(stderr,"Error: username %s not found.\n",optarg);
+	    exit(2);
+	    }
+	else {
+	    uid = pwd->pw_uid;
+	    do_uid = TRUE;
+	    }
+	break;
+    case '?':
+	errflg++;
+    }}
+if (optind >= argc) 
+	errflg++;
+if (errflg) {
+    err_quit("usage: dirsort [-n <#>] [-u <username>] path1...");
+    }
+
+@ Now let me declare all the new variables used above.
+@d TRUE 1
+@d FALSE 0
+@< Global variables @>=
+extern char *optarg;
+int errflg,yrcnt,c;
+int do_uid=FALSE;
+uid_t uid;
+struct passwd *pwd;
+
+@
+@< Global |#include|s @>=
+#include <pwd.h>
+
+@
+@< Sort names @>=
+#if defined(DEBUG)
+printf("Sorting file sizes.\n");
+#endif
+if (ureg > 1)
+    indexx(ureg,filesize,indices);
+#if defined(DEBUG)
+for (j=1;j<=ureg;j++) {
+     printf("%s, indices[%ld] = %ld\n",filenames[j],j,indices[j]);
+    }
+#endif
+
+@
+@< Global variables @>=
+long j;
+
+@ Modified to output GB, MB, or KB, depending on file size.
+@< Output data @>=
+#if defined(DEBUG)
+printf("Outputting data.\n");
+#endif
+if (yrcnt > ureg) yrcnt = ureg;
+for (j=ureg;j>ureg-yrcnt;j--) {
+    tsize = filesize[indices[j]];
+    if (tsize > 1000000000) {
+        fsize = tsize/1000000000;
+        fprintf(stdout,"%3ld. (%4g GB) \t %s \n",(ureg-j+1),
+		fsize, filenames[indices[j]]);
+        }
+     else if (tsize > 1000000) {
+        fsize = tsize/1000000;
+        fprintf(stdout,"%3ld. (%4g MB) \t %s \n",(ureg-j+1),
+		fsize, filenames[indices[j]]);
+        }
+    else if (tsize > 1000) {
+        fsize = tsize/1000;
+        fprintf(stdout,"%3ld. (%4g KB) \t %s \n",(ureg-j+1),
+		fsize, filenames[indices[j]]);
+	}
+    else {
+        fprintf(stdout,"%3ld. (%4ld bytes) \t %s \n",(ureg-j+1),
+		filesize[indices[j]], filenames[indices[j]]);
+    }
+}
+
+@
+@< Global variables @>=
+long tsize;
+double fsize;
+
+@ Sort the indices of an array.  Lifted from {\it Numerical Recipes}.
+@< Functions @>=
+void indexx(n,arrin,indx)
+long n,indx[];
+long arrin[];
+{
+	long l,j,ir,indxt,i;
+	long q;
+
+	for (j=1;j<=n;j++) indx[j]=j;
+	l=(n >> 1) + 1;
+	ir=n;
+	for (;;) {
+		if (l > 1)
+			q=arrin[(indxt=indx[--l])];
+		else {
+			q=arrin[(indxt=indx[ir])];
+			indx[ir]=indx[1];
+			if (--ir == 1) {
+				indx[1]=indxt;
+				return;
+			}
+		}
+		i=l;
+		j=l << 1;
+		while (j <= ir) {
+			if (j < ir && arrin[indx[j]] < arrin[indx[j+1]]) j++;
+			if (q < arrin[indx[j]]) {
+				indx[i]=indx[j];
+				j += (i=j);
+			}
+			else j=ir+1;
+		}
+		indx[i]=indxt;
+	}
+}
+
+@* Index.

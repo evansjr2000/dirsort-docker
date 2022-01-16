@@ -1,0 +1,9 @@
+#define HasGcc YES
+#define HasGcc2 YES
+
+#define TeXProcessor tex
+#define PdfProcessor pdftex
+#define Tangle atangle
+#define Weave aweave
+
+/* End of site.p-def */

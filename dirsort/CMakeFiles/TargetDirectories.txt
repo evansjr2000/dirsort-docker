@@ -1,0 +1,4 @@
+/home/evansjr/ctools/dirsort-container/dirsort/CMakeFiles/rebuild_cache.dir
+/home/evansjr/ctools/dirsort-container/dirsort/CMakeFiles/edit_cache.dir
+/home/evansjr/ctools/dirsort-container/dirsort/CMakeFiles/dirsort.dir
+/home/evansjr/ctools/dirsort-container/dirsort/CMakeFiles/TDocument.dir

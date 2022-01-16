@@ -1,0 +1,27 @@
+.MAKE_VERSION:	VERSION-1.0
+even.dvi:
+	dviselect -i dirsort.dvi -o even.dvi even
+install:
+	cp dirsort /usr/local/bin
+clean:
+	rm -f dirsort.c dirsort.tex *.o *.dvi *.ps
+.BUILT_LAST_MAKE_RUN:
+dirsort:	/opt/SUNWspro/bin/../SC2.0.1/crti.o /opt/SUNWspro/bin/../SC2.0.1/crt1.o /opt/SUNWspro/bin/../SC2.0.1/values-xt.o /opt/SUNWspro/bin/../SC2.0.1/crtn.o 
+	cc -L/home/orange/gnu/apue -o dirsort dirsort.o -lmisc
+even.ps:
+	dvips -f even.dvi > even.ps
+dirsort.tex:
+	fweave -c -PL dirsort.web dirsort.ch
+dirsort.dvi:
+	tex dirsort.tex
+odd.dvi:
+	dviselect -i dirsort.dvi -o odd.dvi odd
+dirsort.ps:
+	dvips -f dirsort.dvi > dirsort.ps
+odd.ps:
+	dvips -f odd.dvi > odd.ps
+.BUILT_LAST_MAKE_RUN:
+dirsort.o:	/usr/include/sys/types.h /usr/include/sys/machtypes.h /usr/include/sys/select.h /usr/include/sys/time.h /usr/include/time.h /usr/include/sys/stat.h /usr/include/dirent.h /usr/include/sys/dirent.h /usr/include/limits.h /home/orange/gnu/apue/ourhdr.h /usr/include/stdio.h /usr/include/stdlib.h /usr/include/string.h /usr/include/unistd.h /usr/include/sys/unistd.h /usr/include/pwd.h 
+	cc -c -O dirsort.c -I/home/orange/gnu/apue; 
+dirsort.c:
+	ftangle -c dirsort.web dirsort.ch

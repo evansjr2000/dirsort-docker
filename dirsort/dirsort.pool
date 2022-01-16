@@ -1,0 +1,13 @@
+08ourhdr.h
+33regular files  = %7ld, %5.2f %%\n
+33directories    = %7ld, %5.2f %%\n
+33block special  = %7ld, %5.2f %%\n
+33char special   = %7ld, %5.2f %%\n
+33FIFOs          = %7ld, %5.2f %%\n
+33symbolic links = %7ld, %5.2f %%\n
+33sockets        = %7ld, %5.2f %%\n
+29\n%s files = %7ld, %5.2f %%\n
+04n:u:
+21Sorting file sizes.\n
+18Outputting data.\n
+*258098822
