@@ -1,0 +1,9 @@
+FROM gcc:9-buster  as build-stage
+RUN /bin/sh -c set -ex; apt-get update -y; apt-get upgrade -y;
+
+COPY . .
+RUN type make
+RUN cd /complete-apue/lib.svr4; make clean; make
+
+FROM debian:buster
+COPY --from=build-stage ./dirsort/dirsort ./dirsort
