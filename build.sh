@@ -1,6 +1,6 @@
 #!/bin/bash -x
 
-export VERS=V1.5
+export VERS=V1.6
 
 docker build --tag evansjr/dirsort:${VERS} -f Dockerfile2 .
 

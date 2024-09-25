@@ -20,7 +20,8 @@ ns_pipe(const char *name, int fd[2])
 
 	memset(&unix_addr, 0, sizeof(unix_addr));
 	unix_addr.sun_family = AF_UNIX;
-	strcpy(unix_addr.sun_path, name);
+	len = *name;
+	strncpy(unix_addr.sun_path, name,len);
 	len = strlen(unix_addr.sun_path) + sizeof(unix_addr.sun_family);
 
 	return(bind(fd[0], (struct sockaddr *) &unix_addr, len));

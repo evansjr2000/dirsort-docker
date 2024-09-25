@@ -11,7 +11,7 @@ int
 ptym_open(char *pts_name)
 {
 	char	*ptr;
-	int		fdm;
+	int		len,fdm;
 
 	strcpy(pts_name, "/dev/ptmx");	/* in case open fails */
 	if ( (fdm = open(pts_name, O_RDWR)) < 0)
@@ -30,7 +30,8 @@ ptym_open(char *pts_name)
 		return(-4);
 	}
 
-	strcpy(pts_name, ptr);	/* return name of slave */
+	len = strlen(ptr);
+	strncpy(pts_name, ptr,len);	/* return name of slave */
 	return(fdm);			/* return fd of master */
 }
 int
